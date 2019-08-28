@@ -96,7 +96,7 @@ class Mapper(object):
     def _map_describe(self):
         cur = self._cursor
 
-        cur.execute("SHOW TABLES")
+        cur.execute("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'")
 
         while True:
             table = cur.fetchone()

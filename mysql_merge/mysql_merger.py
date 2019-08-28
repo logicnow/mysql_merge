@@ -1,9 +1,9 @@
+from mysql_merge.config import ExecutionMode
 from mysql_merge.utils import MiniLogger, create_connection, handle_exception
 from mysql_merge.mysql_mapper import Mapper
 from mysql_merge.utils import map_fks, lists_diff
 import MySQLdb
 import warnings
-
 
 class Merger(object):
     _conn = None
@@ -19,15 +19,14 @@ class Merger(object):
 
     _destination_db = None
     _source_db = None
-
     _orphaned_rows_update_values = {}
-    _increment_step = 0
-    _increment_value = property(lambda self: self._counter * self._increment_step)
+    _execution_mode = ExecutionMode.default
 
-    def __init__(self, destination_db_map, source_db, destination_db, config, counter, logger):
+    def __init__(self, execution_mode, destination_db_map, source_db, destination_db, config, counter, logger):
+
+        self._execution_mode = execution_mode
         self._destination_db_map = destination_db_map
 
-        self._increment_step = config.increment_step
         self._orphaned_rows_update_values = config.orphaned_rows_update_values
         self._source_db = source_db
         self._destination_db = destination_db
@@ -85,40 +84,43 @@ class Merger(object):
 
         self._fk_checks(False)
 
-        self._logger.log(" -> 1/9 Executing preprocess_queries (specified in config)")
+        self._logger.log(" -> 1/11 Executing preprocess_queries (specified in config)")
         self.execute_preprocess_queries()
 
-        self._logger.log(" -> 2/9 Converting tables to InnoDb")
+        self._logger.log(" -> 2/11 Converting tables to InnoDb")
         self.convert_tables_to_innodb()
 
-        self._logger.log(" -> 3/9 Converting FKs to UPDATE CASCADE")
+        self._logger.log(" -> 3/11 Converting FKs to UPDATE CASCADE")
         self.convert_fks_to_update_cascade()
 
-        self._logger.log(" -> 4/9 Converting mapped FKs to real FKs")
+        self._logger.log(" -> 4/11 Converting mapped FKs to real FKs")
         self.convert_mapped_fks_to_real_fks()
 
-        self._logger.log(" -> 5/9 Nulling orphaned FKs")
+        self._logger.log(" -> 5/11 Nulling orphaned FKs")
         self.null_orphaned_fks()
 
         self._fk_checks(True)
 
-        self._logger.log(" -> 6/9 Incrementing PKs")
+        self._logger.log(" -> 6/11 Handle enum tables")
+        self.handle_enum_tables()
+
+        self._logger.log(" -> 7/11 Incrementing PKs")
         self.increment_pks()
 
-        self._logger.log(" -> 7/9 Mapping pk in case of uniques conflict")
+        self._logger.log(" -> 8/11 Mapping pk in case of uniques conflict")
         self.map_pks_to_target_on_unique_conflict()
 
         self._fk_checks(False)
 
-        self._logger.log(" -> 8/9 Copying data to the destination db")
+        self._logger.log(" -> 9/11 Copying data to the destination db")
         self.copy_data_to_target()
 
         self._fk_checks(True)
 
-        self._logger.log(" -> 9/9 Decrementing pks")
+        self._logger.log(" -> 10/11 Decrementing pks")
         self.rollback_pks()
 
-        self._logger.log(" -> 10/9 Committing changes")
+        self._logger.log(" -> 11/11 Committing changes")
         self._conn.commit()
         self._logger.log("----------------------------------------")
 
@@ -140,7 +142,7 @@ class Merger(object):
         cur = self._cursor
 
         # Convert all tables to InnoDB
-        for table_name, table_map in self._db_map.items():
+        for table_name in self._db_map.keys():
             try:
                 self._logger.qs = "select engine from information_schema.TABLES where table_schema = '%s' and table_name = '%s'" % (
                     self._source_db['db'], table_name)
@@ -229,19 +231,21 @@ class Merger(object):
 
         # Update all numeric PKs to ID + 1 000 000
         for table_name, table_map in self._db_map.items():
-            for col_name, col_data in table_map['primary'].items():
+            for col_name in table_map['primary'].keys():
                 # If current col is also a Foreign Key, we do not touch it
                 if table_map['fk_host'].has_key(col_name):
                     continue
 
+                increment_value = self.get_increment_value(table_name)
+
                 try:
                     self._logger.qs = "UPDATE `%(table)s` SET `%(pk)s` = `%(pk)s` + %(step)d" % {"table": table_name,
                                                                                                  "pk": col_name,
-                                                                                                 'step': self._increment_value}
+                                                                                                 'step': increment_value}
                     cur.execute(self._logger.qs)
                 except Exception, e:
                     handle_exception("There was an error while updating PK `%s`.`%s` to %d + pk_value" % (
-                    table_name, col_name, self._increment_value), e, self._conn)
+                    table_name, col_name, increment_value), e, self._conn)
 
     def map_pks_to_target_on_unique_conflict(self):
         cur = self._cursor
@@ -255,7 +259,6 @@ class Merger(object):
                 continue
 
             pk_col = pks[0]
-            pks_processed = []
             for index_name, columns in table_map['indexes'].items():
                 new_pk = old_pk = ""
                 try:
@@ -293,18 +296,6 @@ class Merger(object):
                     handle_exception(
                         "There was an error while normalizing unique index `%s`.`%s` from values '%s' to value '%s'" % (
                         table_name, index_name, old_pk, new_pk), e, self._conn)
-
-                    """
-                      # Delete all updated PKs - cascade was already triggered
-                      if len(pks_processed):
-                        self._logger.qs = "DELETE FROM `%(table)s` WHERE `%(pk_col)s` IN (%(pks)s)" % {
-                          'table': table_name,
-                          'pk_col': pk_col,
-                          'pks': ",".join(pks_processed)
-                        }
-                        update_cur.execute(self._logger.qs)
-                    """
-
         update_cur.close()
 
     def copy_data_to_target(self):
@@ -356,16 +347,81 @@ class Merger(object):
 
         # Return all PKs to thei previous state: ID - 1 000 000
         for table_name, table_map in self._db_map.items():
-            for col_name, col_data in table_map['primary'].items():
+            for col_name in table_map['primary'].keys():
                 if table_map['fk_host'].has_key(col_name):
                     continue
 
+                increment_value = self.get_increment_value(table_name)
                 try:
                     self._logger.qs = "UPDATE `%(table)s` SET `%(pk)s` = `%(pk)s` - %(step)d" % {"table": table_name,
                                                                                                  "pk": col_name,
-                                                                                                 'step': self._increment_value}
+                                                                                                 'step': increment_value}
                     cur.execute(self._logger.qs)
                 except Exception, e:
                     handle_exception("There was an error while updating PK `%s`.`%s` to -%d + pk_value" % (
-                    table_name, col_name, self._increment_value), e, self._conn)
-  
+                    table_name, col_name,increment_value), e, self._conn)
+
+    def handle_enum_tables(self):
+
+        for table_name in self._config.enum_tables:
+            if not (table_name in self._db_map.keys() and table_name in self._destination_db_map.keys()):
+                self._logger.log("----> '%(table)s' is missing on source or dest db" % {"table": table_name})
+                continue
+
+            columns = self._source_mapper.get_overlapping_columns(self._destination_db_map, table_name)
+            if not len(columns):
+                raise Exception("Table %s have no intersecting column in merged database and destination database")
+
+            on = ""
+            where = ""
+            for pk in self._db_map[table_name]['primary'].keys():
+                on += "" if len(on) == 0 else " AND"
+                on += "`%(source_db)s`.`%(table)s`.`%(pk)s` = `%(destination_db)s`.`%(table)s`.`%(pk)s`" % {"source_db":self._source_db['db'],
+                                                                                                            "destination_db": self._destination_db['db'],
+                                                                                                            "table": table_name,
+                                                                                                            "pk": pk}
+                where += "" if len(where) == 0 else " OR"
+                where += "`%(destination_db)s`.`%(table)s`.`%(pk)s` IS NULL" % {"destination_db": self._destination_db['db'],
+                                                                           "table": table_name,
+                                                                           "pk": pk}
+
+            for column in columns:
+                where += " OR `%(source_db)s`.`%(table)s`.`%(col)s` <> `%(destination_db)s`.`%(table)s`.`%(col)s`" % {"source_db":self._source_db['db'],
+                                                                                                               "destination_db": self._destination_db['db'],
+                                                                                                               "table": table_name,
+                                                                                                               "col": column}
+
+            self._logger.qs = "SELECT 1 FROM `%(source_db)s`.`%(table)s` LEFT JOIN `%(destination_db)s`.`%(table)s` ON %(on)s WHERE  %(where)s" % {
+                'destination_db': self._destination_db['db'],
+                'source_db': self._source_db['db'],
+                'table': table_name,
+                'where': where,
+                'on': on
+            }
+
+            could_ignore = True
+
+            try:
+                cur = self._cursor
+                cur.execute(self._logger.qs)
+                while could_ignore:
+                    row = cur.fetchone()
+                    if not row:
+                        break
+                    self._logger.log("----> Source enum Table %s has values incompatible with destination database and will be merged" % table_name)
+                    could_ignore = False
+
+            except Exception, e:
+                handle_exception("Exception occured while comparing '%(t)s' enum table" % {"t": table_name}, e, self._conn)
+
+            if could_ignore:
+                self._logger.log("----> Enum Table %s is compatible with destination database and will be ignored during merge" % table_name)
+                self._db_map.pop(table_name)
+                self._destination_db_map.pop(table_name)
+
+    def get_increment_value(self, table_name):
+        if table_name in self._config.increment_step:
+            increment_step = self._config.increment_step[table_name]
+        else:
+            increment_step =  self._config.increment_step['default']
+        return self._counter * increment_step
