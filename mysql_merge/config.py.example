@@ -1,9 +1,9 @@
 from enum import Enum
 
 class ExecutionMode(Enum):
-  default = 0
-  dry_run = 1
-  import_file = 2
+  DEFAULT = 0
+  DRY_RUN = 1
+  IMPORT_FILE = 2
 
 """
  A list of all DBs to merge.
@@ -106,4 +106,4 @@ default_mapping = { }
 """
 enum_tables = []
 
-ExecutionMode = ExecutionMode.default
+ExecutionMode = ExecutionMode.DEFAULT

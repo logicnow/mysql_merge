@@ -67,4 +67,3 @@ for source_db in config.merged_dbs:
    handle_exception("There was an unexpected error while merging db %s" % source_db['db'], e, conn)
    
 print "Merge is finished"
-
