@@ -186,7 +186,6 @@ class Merger(object):
                     constraint_name, table_name, col_name), e, self._conn)
 
     def null_orphaned_fks(self):
-        # Null orphaned FKs
         mapping = self._orphaned_rows_update_values.get('columns', {})
 
         for table_name, table_map in self._db_map.items():

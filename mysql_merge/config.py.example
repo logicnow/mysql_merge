@@ -106,4 +106,4 @@ default_mapping = { }
 """
 enum_tables = []
 
-ExecutionMode = ExecutionMode.DEFAULT
+execution_mode = ExecutionMode.DEFAULT
