@@ -212,7 +212,7 @@ class Merger(object):
     def change_pks(self, order=1):
         # Update all numeric PKs to ID + (1 000 000) * order
         for table_name, table_map in self._db_map.items():
-            ignored_ids_clause = self._config.not_increment.get(table_name, [])
+            ignored_ids_clause = self._config.ignore.get(table_name, [])
             where_clause = "WHERE `Id` not in (%s)" % ", ".join(str(e) for e in ignored_ids_clause) \
                 if len(ignored_ids_clause) else ""
             for col_name in table_map['primary'].keys():
@@ -310,6 +310,7 @@ class Merger(object):
 
         # Copy all the data to destination table
         for table_name, table_map in self._db_map.items():
+            ignored_values = self._config.ignore.get(table_name, [])
             if any([table_name in v for k, v in diff_tables.items()]):
                 continue
             try:
@@ -336,7 +337,6 @@ class Merger(object):
                     template = compose_insert_query_template(
                         table_name, columns_descriptor)
                     rows = self._cursor.execute("SELECT %(columns)s FROM `%(source_db)s`.`%(table)s` %(where)s" % {
-                        'destination_db': self._destination_db['db'],
                         'source_db': self._source_db['db'],
                         'table': table_name,
                         'where': where,
@@ -350,7 +350,8 @@ class Merger(object):
                         for key, value in row.items():
                             if value is None:
                                 row[key] = 'NULL'
-                        patch.write_line(template.format(row))
+                        if row[table_map['primary'].keys()[0]] not in ignored_values:
+                            patch.write_line(template.format(row))
                 else:
                     self._cursor.execute(
                         "INSERT IGNORE INTO `%(destination_db)s`.`%(table)s` (%(columns)s) SELECT %(columns)s FROM `%(source_db)s`.`%(table)s` %(where)s" % {
