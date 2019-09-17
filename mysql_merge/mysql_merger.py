@@ -226,16 +226,16 @@ class Merger(object):
                         set_clause_add = ""
                         set_clause = "`{c}` = `{c}` + {step}".format(
                             c=col_name, step=increment_value)
-                        self._cursor.execute("UPDATE `{table}` SET {set_clause}".format(
-                            table=table_name, set_clause=set_clause))
+                        self._cursor.execute("UPDATE `{table}` SET {set_clause} {where}".format(
+                            table=table_name, set_clause=set_clause, where=where_clause))
                         self._fk_checks(False)
                         for self_col_name in self._self_referencing_tables[table_name]:
                             set_clause_add += "`{c}` = `{c}` + {step}, ".format(
                                 c=self_col_name, step=increment_value)
-                        self._logger.log("UPDATE `{table}` SET {set_clause_add} {where}".format(
-                            table=table_name, set_clause_add=set_clause_add[:-2]), where=where_clause)
-                        self._cursor.execute("UPDATE `{table}` SET {set_clause_add} {where}".format(
-                            table=table_name, set_clause_add=set_clause_add[:-2]), where=where_clause)
+                        self._logger.log("UPDATE `{table}` SET {set_clause_add}".format(
+                            table=table_name, set_clause_add=set_clause_add[:-2]))
+                        self._cursor.execute("UPDATE `{table}` SET {set_clause_add}".format(
+                            table=table_name, set_clause_add=set_clause_add[:-2]))
                         self._fk_checks(True)
                     else:
                         self._logger.log(
