@@ -212,6 +212,9 @@ class Merger(object):
     def change_pks(self, order=1):
         # Update all numeric PKs to ID + (1 000 000) * order
         for table_name, table_map in self._db_map.items():
+            ignored_ids_clause = self._config.not_increment.get(table_name, [])
+            where_clause = "WHERE `Id` not in (%s)" % ", ".join(str(e) for e in ignored_ids_clause) \
+                if len(ignored_ids_clause) else ""
             for col_name in table_map['primary'].keys():
                 # If current col is also a Foreign Key, we do not touch it
                 if table_map['fk_host'].has_key(col_name) or table_name in self._config.enum_tables:
@@ -229,19 +232,22 @@ class Merger(object):
                         for self_col_name in self._self_referencing_tables[table_name]:
                             set_clause_add += "`{c}` = `{c}` + {step}, ".format(
                                 c=self_col_name, step=increment_value)
-                        self._logger.log("UPDATE `{table}` SET {set_clause_add}".format(
-                            table=table_name, set_clause_add=set_clause_add[:-2]))
-                        self._cursor.execute("UPDATE `{table}` SET {set_clause_add}".format(
-                            table=table_name, set_clause_add=set_clause_add[:-2]))
+                        self._logger.log("UPDATE `{table}` SET {set_clause_add} {where}".format(
+                            table=table_name, set_clause_add=set_clause_add[:-2]), where=where_clause)
+                        self._cursor.execute("UPDATE `{table}` SET {set_clause_add} {where}".format(
+                            table=table_name, set_clause_add=set_clause_add[:-2]), where=where_clause)
                         self._fk_checks(True)
                     else:
-                        self._logger.log("UPDATE `%(table)s` SET `%(pk)s` = `%(pk)s` + %(step)d" % {"table": table_name,
-                                                                                                    "pk": col_name,
-                                                                                                    'step': increment_value})
+                        self._logger.log(
+                            "UPDATE `%(table)s` SET `%(pk)s` = `%(pk)s` + %(step)d %(where)s" % {"table": table_name,
+                                                                                                "pk": col_name,
+                                                                                                "step": increment_value,
+                                                                                                "where": where_clause})
                         self._cursor.execute(
-                            "UPDATE `%(table)s` SET `%(pk)s` = `%(pk)s` + %(step)d" % {"table": table_name,
-                                                                                       "pk": col_name,
-                                                                                       'step': increment_value})
+                            "UPDATE `%(table)s` SET `%(pk)s` = `%(pk)s` + %(step)d %(where)s" % {"table": table_name,
+                                                                                                "pk": col_name,
+                                                                                                "step": increment_value,
+                                                                                                "where": where_clause})
                 except Exception, e:
                     if table_name in self._self_referencing_tables:
                         self._fk_checks(True)
@@ -341,6 +347,9 @@ class Merger(object):
                         row = rows.fetchone()
                         if not row:
                             break
+                        for key, value in row.items():
+                            if value is None:
+                                row[key] = 'NULL'
                         patch.write_line(template.format(row))
                 else:
                     self._cursor.execute(

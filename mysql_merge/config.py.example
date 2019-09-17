@@ -106,4 +106,9 @@ default_mapping = { }
 """
 enum_tables = []
 
+"""
+  List of tables with their's ids that should be ignored during merge.
+"""
+not_increment = {'table_name': [1, 2]}
+
 execution_mode = ExecutionMode.DEFAULT
