@@ -30,7 +30,7 @@ It solves some important problems with data integrity across different databases
 3. Change all tables to InnoDB
 4. Alter all tables and modify FOREIGN KEYS to ON UPDATE CASCADE
 5. Resolve orphaned rows - strategy depends on configuration
-6. Update all numerical PKs to PK + iteration_nb * increment_step ( so they don't conflict in the destination database; increment_step is easily customizable in config.py )
+6. Update all numerical PKs to PK + iteration_nb * increment_step[`table_name`] ( so they don't conflict in the destination database; increment_step is easily customizable in config.py, if `table_name` key is not set `default` will be used instead)
 7. Detect which unique values conflicts with data in the destination db
 8. Update PKs on those rows to corresponding PKs from the destination db
 9. Copy data from all tables to the destination db

@@ -58,7 +58,7 @@ for source_db in config.merged_dbs:
   destination_db_tpl = copy.deepcopy(config.common_data)
   destination_db_tpl.update(config.destination_db)
 
-  merger = Merger(destination_db_map, source_db_tpl, destination_db_tpl, config, counter, MiniLogger())
+  merger = Merger(config.execution_mode, destination_db_map, source_db_tpl, destination_db_tpl, config, counter, MiniLogger())
   merger.merge()
   
 
@@ -67,4 +67,3 @@ for source_db in config.merged_dbs:
    handle_exception("There was an unexpected error while merging db %s" % source_db['db'], e, conn)
    
 print "Merge is finished"
-

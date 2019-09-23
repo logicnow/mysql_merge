@@ -1,3 +1,10 @@
+from enum import Enum
+
+class ExecutionMode(Enum):
+  DEFAULT = 0
+  DRY_RUN = 1
+  IMPORT_FILE = 2
+
 """
  A list of all DBs to merge.
  You can supply following keys:
@@ -59,7 +66,9 @@ orphaned_rows_update_values = {
   One million is usually enough, however i any of your databases contains
   values higher than that - just increase it
 """
-increment_step = 1000000
+increment_step = {
+  'default' : 1000000
+}
 
 """
   Whether to display or not most useful information
@@ -90,3 +99,11 @@ preprocess_queries = []
   "report.company_id": "user.id",
 """
 default_mapping = { }
+
+"""
+  List of enum tables which should be equal in each db.
+  Ignored during merge.
+"""
+enum_tables = []
+
+execution_mode = ExecutionMode.DEFAULT
