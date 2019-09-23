@@ -212,12 +212,12 @@ class Merger(object):
     def change_pks(self, order=1):
         # Update all numeric PKs to ID + (1 000 000) * order
         for table_name, table_map in self._db_map.items():
-            ignored_ids_clause = self._config.ignore.get(table_name, [])
+            ignored_ids_clause = self._config.ids_to_ignore.get(table_name, [])
             where_clause = "WHERE `Id` not in (%s)" % ", ".join(str(e) for e in ignored_ids_clause) \
                 if len(ignored_ids_clause) else ""
             for col_name in table_map['primary'].keys():
                 # If current col is also a Foreign Key, we do not touch it
-                if table_map['fk_host'].has_key(col_name) or table_name in self._config.enum_tables:
+                if table_map['fk_host'].has_key(col_name):
                     continue
 
                 increment_value = self.get_increment_value(table_name) * order
@@ -310,7 +310,7 @@ class Merger(object):
 
         # Copy all the data to destination table
         for table_name, table_map in self._db_map.items():
-            ignored_values = self._config.ignore.get(table_name, [])
+            ignored_values = self._config.ids_to_ignore.get(table_name, [])
             if any([table_name in v for k, v in diff_tables.items()]):
                 continue
             try:
