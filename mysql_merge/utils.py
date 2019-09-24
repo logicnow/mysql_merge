@@ -38,7 +38,7 @@ def create_connection(connection, common_data={}):
         data = dict(common_data)
         data.update(connection)
 
-        return MySQLdb.connect(data['host'], data['user'], data['password'], data['db'],
+        return MySQLdb.connect(data['host'], data['user'], data['password'], data['db'], data['port'],
                                cursorclass=MySQLdb.cursors.DictCursor)
 
     except Exception, e:

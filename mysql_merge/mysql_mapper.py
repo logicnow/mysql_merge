@@ -1,7 +1,7 @@
 from collections import defaultdict
 import sys
 import copy
-from mysql_merge.config import enum_tables
+from mysql_merge.config import tables_to_ignore
 
 
 class Mapper(object):
@@ -21,7 +21,7 @@ class Mapper(object):
     _cursor = None
     _logger = None
     _verbose = True
-    _enum_tables = None
+    _tables_to_ignore = None
 
     def __init__(self, conn, db_name, logger, verbose=True):
         self.db_map = {}
@@ -34,7 +34,7 @@ class Mapper(object):
         self._conn = conn
         self._cursor = self._conn.cursor()
 
-        self._enum_tables = enum_tables
+        self._tables_to_ignore = tables_to_ignore
 
     def map_db(self):
         self._map_describe()
@@ -109,7 +109,7 @@ class Mapper(object):
                 break
 
             table = table.items()[0][1]
-            if table in self._enum_tables:
+            if table in self._tables_to_ignore:
                 continue
             table_map = copy.deepcopy(self.table_map_template)
 
@@ -170,7 +170,7 @@ class Mapper(object):
             if not data:
                 break
             child = data['child']
-            if child in self._enum_tables:
+            if child in self._tables_to_ignore:
                 continue
             child_col = data['child_col']
 
@@ -194,7 +194,7 @@ class Mapper(object):
                 break
 
             table_name = data.values()[0]
-            if table_name in self._enum_tables:
+            if table_name in self._tables_to_ignore:
                 continue
 
             self._logger.qs = "SHOW INDEXES FROM %s" % table_name
