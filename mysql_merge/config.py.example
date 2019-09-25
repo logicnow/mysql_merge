@@ -27,6 +27,7 @@ destination_db = {
   'db': 'db_new'
   'host': 'yourhost.com',
   'user': 'user',
+  'port': 3306
 }
 
 """
@@ -104,6 +105,11 @@ default_mapping = { }
   List of enum tables which should be equal in each db.
   Ignored during merge.
 """
-enum_tables = []
+tables_to_ignore = []
+
+"""
+  List of tables with their's ids that should be ignored during merge.
+"""
+ids_to_ignore = {'table_name': [1, 2]}
 
 execution_mode = ExecutionMode.DEFAULT

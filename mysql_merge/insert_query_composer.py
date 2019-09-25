@@ -8,4 +8,4 @@ def compose_insert_query_template(table_name, columns):
         values_clause += val.format(column_name=column['Field'])
     columns_clause = columns_clause.rstrip(", ")
     values_clause = values_clause.rstrip(", ")
-    return "INSERT IGNORE INTO `" + table_name + "` (" + columns_clause + ") VALUES(" + values_clause + ");"
+    return "INSERT INTO `" + table_name + "` (" + columns_clause + ") VALUES(" + values_clause + ");"

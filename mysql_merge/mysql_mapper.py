@@ -1,6 +1,7 @@
 from collections import defaultdict
 import sys
 import copy
+from mysql_merge.config import tables_to_ignore
 
 
 class Mapper(object):
@@ -20,6 +21,7 @@ class Mapper(object):
     _cursor = None
     _logger = None
     _verbose = True
+    _tables_to_ignore = None
 
     def __init__(self, conn, db_name, logger, verbose=True):
         self.db_map = {}
@@ -31,6 +33,8 @@ class Mapper(object):
 
         self._conn = conn
         self._cursor = self._conn.cursor()
+
+        self._tables_to_ignore = tables_to_ignore
 
     def map_db(self):
         self._map_describe()
@@ -96,7 +100,8 @@ class Mapper(object):
     def _map_describe(self):
         cur = self._cursor
 
-        cur.execute("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'")
+        cur.execute("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '%(database)s'" % {
+            "database": self._db_name})
 
         while True:
             table = cur.fetchone()
@@ -104,6 +109,8 @@ class Mapper(object):
                 break
 
             table = table.items()[0][1]
+            if table in self._tables_to_ignore:
+                continue
             table_map = copy.deepcopy(self.table_map_template)
 
             cur2 = self._conn.cursor()
@@ -163,6 +170,8 @@ class Mapper(object):
             if not data:
                 break
             child = data['child']
+            if child in self._tables_to_ignore:
+                continue
             child_col = data['child_col']
 
             del data['child'], data['child_col']
@@ -174,7 +183,8 @@ class Mapper(object):
     def _map_indexes(self):
         cur = self._cursor
 
-        self._logger.qs = "SHOW TABLES"
+        self._logger.qs = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '%(database)s'" % {
+            "database": self._db_name}
         cur.execute(self._logger.qs)
 
         index_cur = self._conn.cursor()
@@ -184,6 +194,8 @@ class Mapper(object):
                 break
 
             table_name = data.values()[0]
+            if table_name in self._tables_to_ignore:
+                continue
 
             self._logger.qs = "SHOW INDEXES FROM %s" % table_name
             index_cur.execute(self._logger.qs)
