@@ -354,7 +354,7 @@ class Merger(object):
                             patch.write_line(template.format(row))
                 else:
                     self._cursor.execute(
-                        "INSERT IGNORE INTO `%(destination_db)s`.`%(table)s` (%(columns)s) SELECT %(columns)s FROM `%(source_db)s`.`%(table)s` %(where)s" % {
+                        "INSERT INTO `%(destination_db)s`.`%(table)s` (%(columns)s) SELECT %(columns)s FROM `%(source_db)s`.`%(table)s` %(where)s" % {
                             'destination_db': self._destination_db['db'],
                             'source_db': self._source_db['db'],
                             'table': table_name,
