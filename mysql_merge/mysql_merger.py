@@ -43,6 +43,8 @@ class Merger(object):
 
         self._step = 1
         self._total_steps = self.CONST_STEPS
+        if self._config.skip_ids_decrement:
+            self._total_steps -= 1
 
         self._conn = create_connection(self._source_db)
         self._cursor = CursorWrapper(self._conn, self._logger, execution_mode == ExecutionMode.DRY_RUN)
@@ -117,8 +119,9 @@ class Merger(object):
 
         self._fk_checks(True)
 
-        self._log_step("Decrementing PKs")
-        self.change_pks(-1)
+        if self._config.skip_ids_decrement:
+            self._log_step("Decrementing PKs")
+            self.change_pks(-1)
 
         self._log_step("Committing changes")
         self._conn.commit()
