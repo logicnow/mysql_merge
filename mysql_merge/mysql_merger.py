@@ -41,6 +41,11 @@ class Merger(object):
         self._counter = counter
         self._logger = logger
 
+        self._step = 1
+        self._total_steps = self.CONST_STEPS
+        if self._config.skip_ids_decrement:
+            self._total_steps -= 1
+
         self._conn = create_connection(self._source_db)
         self._cursor = CursorWrapper(self._conn, self._logger, execution_mode == ExecutionMode.DRY_RUN)
 
@@ -74,6 +79,10 @@ class Merger(object):
         if self._conn:
             self._conn.close()
 
+    def log_step(self, message):
+        self._logger.log(" -> %d/%d %s" % (self._step, self._total_steps, message))
+        self._step += 1
+
     def merge(self):
         self._conn.begin()
 
@@ -81,38 +90,40 @@ class Merger(object):
         self._logger.log("Processing database '%s'..." % self._source_db['db'])
 
         self._fk_checks(False)
+        self._step = 1
 
-        self._logger.log(" -> 1/%d Executing preprocess_queries (specified in config)" % self.CONST_STEPS)
+        self._log_step("Executing preprocess_queries (specified in config)")
         self.execute_preprocess_queries()
 
-        self._logger.log(" -> 2/%d Converting tables to InnoDb" % self.CONST_STEPS)
+        self._log_step("Converting tables to InnoDb")
         self.convert_tables_to_innodb()
 
-        self._logger.log(" -> 3/%d Converting FKs to UPDATE CASCADE" % self.CONST_STEPS)
+        self._log_step("Converting FKs to UPDATE CASCADE")
         self.convert_fks_to_update_cascade()
 
-        self._logger.log(" -> 4/%d Converting mapped FKs to real FKs" % self.CONST_STEPS)
+        self._log_step("Converting mapped FKs to real FKs")
         self.convert_mapped_fks_to_real_fks()
 
-        self._logger.log(" -> 5/%d Nulling orphaned FKs" % self.CONST_STEPS)
+        self._log_step("Nulling orphaned FKs")
         self.null_orphaned_fks()
 
         self._fk_checks(True)
 
-        self._logger.log(" -> 6/%d Incrementing PKs" % self.CONST_STEPS)
+        self._log_step("Incrementing PKs")
         self.change_pks()
 
         self._fk_checks(False)
 
-        self._logger.log(" -> 7/%d Copying data to the destination db" % self.CONST_STEPS)
+        self._log_step("Copying data to the destination db")
         self.copy_data_to_target()
 
         self._fk_checks(True)
 
-        self._logger.log(" -> 8/%d Decrementing pks" % self.CONST_STEPS)
-        self.change_pks(-1)
+        if self._config.skip_ids_decrement:
+            self._log_step("Decrementing PKs")
+            self.change_pks(-1)
 
-        self._logger.log(" -> 9/%d Committing changes" % self.CONST_STEPS)
+        self._log_step("Committing changes")
         self._conn.commit()
         self._logger.log("----------------------------------------")
 
