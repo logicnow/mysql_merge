@@ -79,7 +79,7 @@ class Merger(object):
         if self._conn:
             self._conn.close()
 
-    def log_step(self, message):
+    def _log_step(self, message):
         self._logger.log(" -> %d/%d %s" % (self._step, self._total_steps, message))
         self._step += 1
 
@@ -119,7 +119,7 @@ class Merger(object):
 
         self._fk_checks(True)
 
-        if self._config.skip_ids_decrement:
+        if not self._config.skip_ids_decrement:
             self._log_step("Decrementing PKs")
             self.change_pks(-1)
 
@@ -359,8 +359,7 @@ class Merger(object):
                         if not row:
                             break
                         for key, value in row.items():
-                            if value is None:
-                                row[key] = 'NULL'
+                            row[key] = self._conn.escape(value, self._conn.encoders)
                         if row[table_map['primary'].keys()[0]] not in ignored_values:
                             patch.write_line(template.format(row))
                 else:
