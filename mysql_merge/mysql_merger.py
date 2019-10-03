@@ -319,6 +319,9 @@ class Merger(object):
             if len(v):
                 self._logger.log("----> Skipping some missing tables in %s database: %s; " % (k, v))
 
+        patch = self.get_patch_file()
+        patch.write_line('SET FOREIGN_KEY_CHECKS = 0;')
+
         # Copy all the data to destination table
         for table_name, table_map in self._db_map.items():
             ignored_values = self._config.ids_to_ignore.get(table_name, [])
@@ -353,7 +356,6 @@ class Merger(object):
                         'where': where,
                         'columns': "`%s`" % ("`,`".join(columns))
                     })
-                    patch = self.get_patch_file()
                     while True:
                         row = rows.fetchone()
                         if not row:
@@ -376,6 +378,7 @@ class Merger(object):
                 handle_exception(
                     ("There was an error while moving data between databases. Table: `%s`.\n" + hint) % (table_name), e,
                     self._conn)
+        patch.write_line('SET FOREIGN_KEY_CHECKS = 1;')
 
     def get_increment_value(self, table_name):
         if table_name in self._config.increment_step:
