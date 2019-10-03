@@ -360,10 +360,11 @@ class Merger(object):
                         row = rows.fetchone()
                         if not row:
                             break
+                        if row[table_map['primary'].keys()[0]] in ignored_values:
+                            continue
                         for key, value in row.items():
                             row[key] = self._conn.escape(value, self._conn.encoders)
-                        if row[table_map['primary'].keys()[0]] not in ignored_values:
-                            patch.write_line(template.format(row))
+                        patch.write_line(template.format(row))
                 else:
                     self._cursor.execute(
                         "INSERT INTO `%(destination_db)s`.`%(table)s` (%(columns)s) SELECT %(columns)s FROM `%(source_db)s`.`%(table)s` %(where)s" % {
