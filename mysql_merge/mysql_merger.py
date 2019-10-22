@@ -1,6 +1,6 @@
 from mysql_merge.config import ExecutionMode
 from mysql_merge.cursor_wrapper import CursorWrapper
-from mysql_merge.insert_query_composer import InserQueryComposer
+from mysql_merge.insert_query_composer import InsertQueryComposer
 from mysql_merge.patch_file_helper import PatchFileHelper
 from mysql_merge.utils import MiniLogger, create_connection, handle_exception
 from mysql_merge.mysql_mapper import Mapper
@@ -353,7 +353,7 @@ class Merger(object):
                 if self._execution_mode == ExecutionMode.IMPORT_FILE:
                     columns_descriptor = [
                         table_map['columns'][x] for x in columns]
-                    query_composer = InserQueryComposer(table_name, columns_descriptor)
+                    query_composer = InsertQueryComposer(table_name, columns_descriptor)
                     rows = self._cursor.execute(select_from_src_query)
                     while True:
                         row = rows.fetchone()

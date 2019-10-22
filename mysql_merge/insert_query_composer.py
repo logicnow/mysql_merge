@@ -1,4 +1,4 @@
-class InserQueryComposer(object):
+class InsertQueryComposer(object):
     _insert_part = None
     _values_part_template = None
     _values_part = None
@@ -25,7 +25,7 @@ class InserQueryComposer(object):
 
     def get_query(self):
         if self.values_count == 0:
-            raise Exception("No values provided to InserQueryComposer")
+            raise Exception("No values provided to InsertQueryComposer")
         self._values_part = self._values_part.rstrip(",")
         return "{insert}{values};".format(insert=self._insert_part, values=self._values_part)
 
