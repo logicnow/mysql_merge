@@ -1,6 +1,6 @@
 from mysql_merge.config import ExecutionMode
 from mysql_merge.cursor_wrapper import CursorWrapper
-from mysql_merge.insert_query_composer import compose_insert_query_template
+from mysql_merge.insert_query_composer import InsertQueryComposer
 from mysql_merge.patch_file_helper import PatchFileHelper
 from mysql_merge.utils import MiniLogger, create_connection, handle_exception
 from mysql_merge.mysql_mapper import Mapper
@@ -324,15 +324,14 @@ class Merger(object):
 
         # Copy all the data to destination table
         for table_name, table_map in self._db_map.items():
-            ignored_values = self._config.ids_to_ignore.get(table_name, [])
             if any([table_name in v for k, v in diff_tables.items()]):
                 continue
             try:
-                where = ""
-                if len(table_map['pk_changed_to_resolve_unique_conficts']):
-                    where = "WHERE %(pk_col)s NOT IN (%(ids)s)" % {
+                ignored_records = self._config.ids_to_ignore.get(table_name, [])
+                ignored_records += table_map['pk_changed_to_resolve_unique_conficts']
+                where = "" if not len(ignored_records) else "WHERE %(pk_col)s NOT IN (%(ids)s)" % {
                         'pk_col': table_map['primary'].keys()[0],
-                        'ids': ",".join(table_map['pk_changed_to_resolve_unique_conficts'])
+                        'ids': ",".join(map(str, ignored_records))
                     }
 
                 diff_columns = self._source_mapper.get_non_overlapping_columns(self._destination_db_map, table_name)
@@ -342,36 +341,40 @@ class Merger(object):
                             "----> Skipping some missing columns in %s database in table %s: %s; " % (k, table_name, v))
 
                 columns = self._source_mapper.get_overlapping_columns(self._destination_db_map, table_name)
+                select_from_src_query = "SELECT %(columns)s FROM `%(source_db)s`.`%(table)s` %(where)s;" % {
+                        'source_db': self._source_db['db'],
+                        'table': table_name,
+                        'where': where,
+                        'columns': "`%s`" % ("`,`".join(columns))
+                    }
                 if not len(columns):
                     raise Exception("Table %s have no intersecting column in merged database and destination database")
 
                 if self._execution_mode == ExecutionMode.IMPORT_FILE:
                     columns_descriptor = [
                         table_map['columns'][x] for x in columns]
-                    template = compose_insert_query_template(
-                        table_name, columns_descriptor)
-                    rows = self._cursor.execute("SELECT %(columns)s FROM `%(source_db)s`.`%(table)s` %(where)s" % {
-                        'source_db': self._source_db['db'],
-                        'table': table_name,
-                        'where': where,
-                        'columns': "`%s`" % ("`,`".join(columns))
-                    })
+                    query_composer = InsertQueryComposer(table_name, columns_descriptor)
+                    rows = self._cursor.execute(select_from_src_query)
                     while True:
                         row = rows.fetchone()
                         if not row:
+                            if query_composer.values_count:
+                                patch.write_line(query_composer.get_query())
+                                query_composer.reset()
                             break
-                        if row[table_map['primary'].keys()[0]] in ignored_values:
-                            continue
                         for key, value in row.items():
                             row[key] = self._conn.escape(value, self._conn.encoders)
-                        patch.write_line(template.format(row))
+                        query_composer.add_value(row)
+                        if query_composer.values_count == self._config.batch_size:
+                            patch.write_line(query_composer.get_query())
+                            query_composer.reset()
                 else:
                     self._cursor.execute(
-                        "INSERT INTO `%(destination_db)s`.`%(table)s` (%(columns)s) SELECT %(columns)s FROM `%(source_db)s`.`%(table)s` %(where)s" % {
+                        "INSERT INTO `%(destination_db)s`.`%(table)s` (%(columns)s) %(select)s" % {
                             'destination_db': self._destination_db['db'],
                             'source_db': self._source_db['db'],
                             'table': table_name,
-                            'where': where,
+                            'select': select_from_src_query,
                             'columns': "`%s`" % ("`,`".join(columns))
                         })
             except Exception, e:
